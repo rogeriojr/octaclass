@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Hashed with bcrypt
+  role      String   // 'teacher' or 'student'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  auditLogs AuditLog[]
+}
+
+model Device {
+  id                    String                  @id @default(uuid())
+  deviceId              String                  @unique
+  name                  String?
+  model                 String?
+  osVersion             String?
+  appVersion            String?
+  lastSeen              DateTime                @default(now())
+  status                String                  @default("online")
+  currentUrl            String?                 // URL atual do navegador (atualizada em tempo real)
+  assignedClass         String?
+  androidManagementName String?
+  enrollmentToken       String?
+  lastPolicyUpdate      DateTime?
+  policy                Policy?
+  screenshots           Screenshot[]
+  notifications         Notification[]
+  activityLogs         DeviceActivityLog[]
+  pendingCommands       DevicePendingCommand[]
+}
+
+model DevicePendingCommand {
+  id         String    @id @default(uuid())
+  deviceId   String
+  device     Device    @relation(fields: [deviceId], references: [deviceId], onDelete: Cascade)
+  type       String
+  payload    String    @default("{}")
+  createdAt  DateTime  @default(now())
+  consumedAt DateTime?
+}
+
+model DeviceActivityLog {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [deviceId])
+  action    String   // BLOCKED_SITE, URL_VISITED, TAB_CHANGE, APP_OPENED, etc.
+  details   String?  // JSON: { url, domain, title, ... }
+  timestamp DateTime @default(now())
+}
+
+model Policy {
+  id                 String   @id @default(uuid())
+  deviceId           String?  @unique
+  device             Device?  @relation(fields: [deviceId], references: [deviceId])
+  blockedDomains     String   @default("[]") // JSON string
+  allowedApps        String   @default("[]") // JSON string
+  blockedApps        String   @default("[]") // JSON string - apps que não podem abrir
+  screenshotInterval Int      @default(60000)
+  kioskMode          Boolean  @default(true)
+  unlockPin          String?  // PIN para desbloqueio do overlay (validado pela API)
+}
+
+model Screenshot {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [deviceId])
+  timestamp DateTime @default(now())
+  event     String
+  url       String?
+  tabId     String?
+  data      String?
+  title     String?
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String   // CREATE_DEVICE, DELETE_DEVICE, UPDATE_POLICY, etc.
+  details   String?  // JSON string
+  timestamp DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [deviceId])
+  type      String   // info, warning, danger
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  timestamp DateTime @default(now())
+}
+
+model PolicyTemplate {
+  id                 String   @id @default(uuid())
+  name               String
+  description        String?
+  blockedDomains     String   @default("[]") // JSON string
+  allowedApps        String   @default("[]") // JSON string
+  screenshotInterval Int      @default(60000)
+  kioskMode          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+}
+
+model GlobalPolicy {
+  id                 String   @id @default(uuid())
+  name               String   @default("Global")
+  blockedDomains     String   @default("[]") // JSON string
+  allowedApps        String   @default("[]") // JSON string
+  screenshotInterval Int      @default(60000)
+  kioskMode          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

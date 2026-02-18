@@ -1,0 +1,12 @@
+{
+  "name": "octaclass",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/start-all.js",
+    "api": "npm run dev --prefix api",
+    "frontend": "npm run dev --prefix frontend",
+    "app": "npm run start --prefix app",
+    "app:android": "npm run android --prefix app",
+    "setup": "node scripts/setup-backend-host.js"
+  }
+}
