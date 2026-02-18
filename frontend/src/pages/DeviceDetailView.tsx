@@ -149,7 +149,12 @@ export const DeviceDetailView: React.FC = () => {
       const payload = updatedDevice as Record<string, unknown>;
       const deviceId = (payload?.id ?? payload?.deviceId) as string | undefined;
       if (deviceId === id) {
-        setDevice(prev => (prev ? ({ ...prev, ...payload, id: deviceId }) : { ...payload, id: deviceId }) as Device);
+        setDevice(prev => {
+          const next = prev ? { ...prev, ...payload, id: deviceId } : { ...payload, id: deviceId };
+          const policies = (payload?.policies as Device['policies'] | undefined) ?? prev?.policies;
+          if (policies && next && 'policies' in next) (next as Device).policies = policies;
+          return next as Device;
+        });
         setLoading(false);
       }
     });
@@ -201,19 +206,22 @@ export const DeviceDetailView: React.FC = () => {
     await updateDevicePolicy({ kioskMode: true });
   };
 
+  const toArray = (v: unknown): string[] => (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string');
+
   const updateDevicePolicy = async (updates: { allowedApps?: string[]; blockedApps?: string[]; kioskMode?: boolean; unlockPin?: string | null }) => {
     if (!device?.id) return false;
     setPolicyMessage(null);
     try {
-      const policies = device.policies as { allowedApps?: string[]; blockedApps?: string[]; kioskMode?: boolean; hasUnlockPin?: boolean } | undefined;
-      const allowedApps = updates.allowedApps ?? policies?.allowedApps ?? [];
-      const blockedApps = updates.blockedApps ?? policies?.blockedApps ?? [];
+      const policies = device.policies as { allowedApps?: string[]; blockedApps?: string[]; blockedDomains?: unknown; kioskMode?: boolean; hasUnlockPin?: boolean; screenshotInterval?: number } | undefined;
+      const allowedApps = toArray(updates.allowedApps ?? policies?.allowedApps);
+      const blockedApps = toArray(updates.blockedApps ?? policies?.blockedApps);
+      const blockedDomains = toArray(policies?.blockedDomains ?? device.policies?.blockedDomains);
       const kioskMode = updates.kioskMode !== undefined ? updates.kioskMode : (policies?.kioskMode ?? true);
       const body: Record<string, unknown> = {
         allowedApps,
         blockedApps,
-        blockedDomains: device.policies?.blockedDomains ?? [],
-        screenshotInterval: device.policies?.screenshotInterval ?? 60000,
+        blockedDomains,
+        screenshotInterval: typeof device.policies?.screenshotInterval === 'number' ? device.policies.screenshotInterval : 60000,
         kioskMode
       };
       if (updates.unlockPin !== undefined) body.unlockPin = updates.unlockPin;
@@ -224,14 +232,28 @@ export const DeviceDetailView: React.FC = () => {
       });
       const data = res.ok ? await res.json().catch(() => ({})) : await res.json().catch(() => ({}));
       if (!res.ok) {
-        setPolicyMessage({ type: 'error', text: (data as { error?: string })?.error ?? 'Falha ao salvar políticas' });
+        const errMsg = (data as { error?: string; details?: unknown })?.error ?? 'Falha ao salvar políticas';
+        setPolicyMessage({ type: 'error', text: errMsg });
         return false;
       }
       setPolicyMessage({ type: 'success', text: 'Políticas salvas. O dispositivo será atualizado em instantes.' });
       setTimeout(() => setPolicyMessage(null), 4000);
       const hasUnlockPin = updates.unlockPin !== undefined ? (updates.unlockPin !== null && updates.unlockPin !== '') : policies?.hasUnlockPin;
-      setDevice(prev => prev?.policies ? { ...prev, policies: { ...prev.policies, kioskMode, hasUnlockPin } } : prev);
-      await fetchDevice(device.id);
+      setDevice(prev => {
+        if (!prev?.policies) return prev;
+        return {
+          ...prev,
+          policies: {
+            ...prev.policies,
+            allowedApps,
+            blockedApps,
+            blockedDomains,
+            kioskMode,
+            hasUnlockPin
+          }
+        };
+      });
+      fetchDevice(device.id).catch(() => {});
       return true;
     } catch {
       setPolicyMessage({ type: 'error', text: 'Erro de conexão ao salvar políticas' });

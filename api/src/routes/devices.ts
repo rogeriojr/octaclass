@@ -285,15 +285,15 @@ router.put('/:deviceId/policies', async (req: Request, res: Response) => {
     });
 
     res.json({ success: true, policy: updatedPolicy });
-  } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ error: 'Dados inválidos', details: error.errors });
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'ZodError') {
+      return res.status(400).json({ error: 'Dados inválidos', details: (error as { errors?: unknown }).errors });
     }
     if (process.env.NODE_ENV !== 'production') {
       const err = error instanceof Error ? error : new Error(String(error));
       console.error('Policy update error:', err.message);
     }
-    res.status(500).json({ error: 'Failed to update policy' });
+    res.status(500).json({ error: 'Falha ao atualizar política' });
   }
 });
 
